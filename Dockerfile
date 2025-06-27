@@ -1,4 +1,4 @@
-# Ultra-fast build for Georgia Business Entity Processor
+# Ultra-fat build for Georgia Business Entity Processor
 FROM ubuntu:22.04 AS base
 
 # Prevent interactive prompts and optimize for speed
