@@ -195,6 +195,7 @@ jobs:
         fi
         
     - name: List generated files
+      if: always()
       run: |
         echo "Files in workspace:"
         ls -la
@@ -206,6 +207,7 @@ jobs:
         find . -name "logs/*.png" -type f 2>/dev/null || echo "No screenshots found"
         
     - name: Upload processed data as artifact
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: georgia-business-data-${{ steps.parse-control.outputs.request_id }}
@@ -216,6 +218,7 @@ jobs:
         if-no-files-found: warn
         
     - name: Show processing summary
+      if: always()
       run: |
         echo "=== GEORGIA BUSINESS PROCESSING SUMMARY ==="
         echo "Control Number: ${{ steps.parse-control.outputs.control_number }}"
