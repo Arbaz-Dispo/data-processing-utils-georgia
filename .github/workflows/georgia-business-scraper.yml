@@ -172,16 +172,16 @@ jobs:
         echo "Control Number: $CONTROL_NUMBER"
         echo "Request ID: $REQUEST_ID"
         
-        # Run the Georgia processor with timeout
+        # Run the Georgia processor with timeout (with virtual display support)
         docker run --rm \
           --name georgia-processor-${{ github.run_number }} \
           -e CONTROL_NUMBER="${CONTROL_NUMBER}" \
           -e REQUEST_ID="${REQUEST_ID}" \
           -e PYTHONUNBUFFERED=1 \
+          -e DISPLAY=:99 \
           -v "$(pwd):/workspace" \
           -w /workspace \
-          --memory="2g" \
-          --cpus="1.5" \
+          --shm-size=2gb \
           "$IMAGE_TAG" \
           timeout 900s python entity_processor.py "${CONTROL_NUMBER}"
         
