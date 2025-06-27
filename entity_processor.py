@@ -194,7 +194,8 @@ def scrape_georgia_business(control_number, max_attempts=3):
                 
                 # Click on the business link in results
                 print(f"[{control_number}] Clicking on business details link")
-                sb.uc_click('td > a')
+                sb.cdp.wait_for_element_visible('td > a', timeout=10)
+                sb.cdp.click('td > a')
                 
                 # Wait for business details page to load
                 print(f"[{control_number}] Waiting for business details to load")
