@@ -180,9 +180,7 @@ def scrape_georgia_business(control_number, max_attempts=3):
 
                 # Now proceed with the search
                 print(f"[{control_number}] Cloudflare bypassed, proceeding with search")
-                
-                sb.cdp.sleep(2)
-                
+                                
                 # Type control number
                 control_input = 'input[id="txtControlNo"]'
                 print(f"[{control_number}] Typing control number: {control_number}")
@@ -192,17 +190,15 @@ def scrape_georgia_business(control_number, max_attempts=3):
                 print(f"[{control_number}] Clicking search button")
                 sb.cdp.click('input[id="btnSearch"]')
                 
-                # Wait a moment for search results
-                sb.cdp.sleep(3)
                 save_screenshot(sb, control_number, "search_results", f"attempt_{attempt}")
                 
                 # Click on the business link in results
                 print(f"[{control_number}] Clicking on business details link")
-                sb.cdp.click("td > a")
+                sb.cdp.click('a[href*="/BusinessSearch/BusinessInformation"]')
                 
                 # Wait for business details page to load
                 print(f"[{control_number}] Waiting for business details to load")
-                sb.cdp.wait_for_element_visible("div[id='businessSearchResult']", timeout=10)
+                sb.cdp.wait_for_element_visible("table", timeout=10)
                 
                 # Save final screenshot
                 save_screenshot(sb, control_number, "final_details", f"attempt_{attempt}")
