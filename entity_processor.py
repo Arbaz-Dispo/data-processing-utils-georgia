@@ -202,7 +202,7 @@ def scrape_georgia_business(control_number, max_attempts=3):
                 
                 # Wait for business details page to load
                 print(f"[{control_number}] Waiting for business details to load")
-                sb.cdp.wait_for_element_visible("table", timeout=10)
+                sb.cdp.wait_for_element_visible("div[id='businessSearchResult']", timeout=10)
                 
                 # Save final screenshot
                 save_screenshot(sb, control_number, "final_details", f"attempt_{attempt}")
