@@ -196,7 +196,7 @@ def scrape_georgia_business(control_number, max_attempts=3):
                 print(f"[{control_number}] Clicking on business details link")
                 sb.cdp.wait_for_element_visible('td > a', timeout=10)
                 sb.cdp.click('td > a')
-                sb.cdp.sleep(1)
+                sb.cdp.sleep(5)
                 
                 # Save final screenshot
                 save_screenshot(sb, control_number, "final_details", f"attempt_{attempt}")
