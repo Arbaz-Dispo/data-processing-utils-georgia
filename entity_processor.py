@@ -154,7 +154,7 @@ def scrape_georgia_business(control_number, max_attempts=3):
         print(f"[{control_number}] Starting scraping attempt {attempt}/{max_attempts}")
         
         try:
-            with SB(uc=True, test=True, locale="en") as sb:
+            with SB(uc=True, test=True, locale="en", xvfb=True, headless=True) as sb:
                 url = "https://ecorp.sos.ga.gov/BusinessSearch"
                 print(f"[{control_number}] Opening URL: {url}")
                 sb.activate_cdp_mode(url)
