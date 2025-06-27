@@ -197,8 +197,23 @@ def scrape_georgia_business(control_number, max_attempts=3):
                 sb.cdp.wait_for_element_visible('td > a', timeout=10)
                 url_entity = sb.cdp.get_element_attribute('td > a', 'href')
                 sb.cdp.get(url_entity)
-                print(url_entity)
-                sb.cdp.sleep(3)
+                
+                # Handle Cloudflare on business details page
+                print(f"[{control_number}] Handling Cloudflare on business details page")
+                bypass_success_details = bypass_cloudflare_with_timeout(sb, control_number, timeout_seconds=30)
+                
+                if not bypass_success_details:
+                    print(f"[{control_number}] Cloudflare bypass failed on business details page, attempt {attempt}")
+                    save_screenshot(sb, control_number, "cloudflare_details_failed", f"attempt_{attempt}")
+                    if attempt < max_attempts:
+                        print(f"[{control_number}] Retrying with new browser session...")
+                        continue
+                    else:
+                        print(f"[{control_number}] All attempts failed - Cloudflare bypass timeout on details page")
+                        return None
+
+                # Save successful details page screenshot
+                save_screenshot(sb, control_number, "cloudflare_details_success", f"attempt_{attempt}")
                 
                 # Save final screenshot
                 save_screenshot(sb, control_number, "final_details", f"attempt_{attempt}")
