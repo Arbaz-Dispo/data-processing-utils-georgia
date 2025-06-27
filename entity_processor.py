@@ -197,6 +197,7 @@ def scrape_georgia_business(control_number, max_attempts=3):
                 sb.cdp.wait_for_element_visible('td > a', timeout=10)
                 url_entity = sb.cdp.get_element_attribute('td > a', 'href')
                 sb.cdp.open(url_entity)
+                print(url_entity)
                 
                 # Save final screenshot
                 save_screenshot(sb, control_number, "final_details", f"attempt_{attempt}")
