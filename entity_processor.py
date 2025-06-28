@@ -344,12 +344,38 @@ def scrape_georgia_business(control_number, max_attempts=3):
                     save_screenshot(sb, control_number, "error", f"no_business_link_attempt_{attempt}")
                     continue
                 
-                # Handle Cloudflare captcha on business details page
-                log(control_number, "Handling captcha on business details page...")
-                details_captcha_success = handle_cloudflare_captcha(sb, control_number)
+                # Handle Cloudflare captcha on business details page (conservative approach)
+                log(control_number, "Checking for captcha on business details page...")
+                page_title = sb.get_title()
+                log(control_number, f"Business details page title: {page_title}")
                 
-                if not details_captcha_success:
-                    log(control_number, "Details page captcha handling failed, but continuing...", "WARNING")
+                if "just a moment" in page_title.lower() or "challenges.cloudflare.com" in sb.get_current_url():
+                    log(control_number, "Cloudflare challenge detected on business details page")
+                    log(control_number, "Using conservative wait approach (no GUI methods)")
+                    
+                    # Conservative approach - just wait without GUI methods that crash
+                    for wait_attempt in range(6):  # Try waiting up to 30 seconds
+                        log(control_number, f"Wait attempt {wait_attempt + 1}/6...")
+                        sb.sleep(5)
+                        
+                        # Check if we're past the challenge
+                        current_title = sb.get_title()
+                        log(control_number, f"Current title after wait: {current_title}")
+                        
+                        if "just a moment" not in current_title.lower():
+                            log(control_number, "Passed Cloudflare challenge with wait approach")
+                            break
+                    else:
+                        log(control_number, "Still on Cloudflare page after waiting, trying page refresh...", "WARNING")
+                        try:
+                            sb.refresh()
+                            sb.sleep(5)
+                            final_title = sb.get_title()
+                            log(control_number, f"Title after refresh: {final_title}")
+                        except Exception as refresh_error:
+                            log(control_number, f"Page refresh failed: {str(refresh_error)}", "WARNING")
+                else:
+                    log(control_number, "No Cloudflare challenge detected on business details page")
                 
                 # Save final screenshot
                 save_screenshot(sb, control_number, "final_details", f"attempt_{attempt}")
