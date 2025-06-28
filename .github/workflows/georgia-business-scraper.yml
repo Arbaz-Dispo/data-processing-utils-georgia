@@ -107,17 +107,18 @@ jobs:
         echo "control_number=$CONTROL_NUMBER" >> $GITHUB_OUTPUT
         echo "request_id=$REQUEST_ID" >> $GITHUB_OUTPUT
         echo "Processing Georgia entity control number: $CONTROL_NUMBER with request ID: $REQUEST_ID"
-    - name: Run Georgia Business Entity Processor
+    - name: Run Simple Georgia Business Scraper
       env:
         CONTROL_NUMBER: ${{ steps.parse-control.outputs.control_number }}
         REQUEST_ID: ${{ steps.parse-control.outputs.request_id }}
         PYTHONUNBUFFERED: 1
         LANG: "en_US.UTF-8"
       run: |
-        echo "🚀 Starting Georgia business processor..."
+        echo "🚀 Starting simple Georgia business scraper..."
         echo "Control Number: $CONTROL_NUMBER"
         echo "Request ID: $REQUEST_ID"
-        python entity_processor.py "$CONTROL_NUMBER"
+        echo "Using exact testng.py logic that works locally"
+        python simple_georgia_scraper.py "$CONTROL_NUMBER"
     - name: List generated files
       if: always()
       run: |
