@@ -8,6 +8,7 @@ import json
 import sys
 import os
 import subprocess
+import time
 from seleniumbase import SB
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -67,14 +68,21 @@ def main():
             # Open site and bypass Cloudflare - EXACT same logic as testng.py
             print("Waiting for search input and handling Cloudflare...")
             control_input = 'input[id="txtControlNo"]'
+            start_time = time.time()
             while not sb.cdp.is_element_present(control_input):
+                if time.time() - start_time > 30:
+                    print("⏰ Timeout after 30 seconds waiting for search input")
+                    screenshot(sb, "timeout_search_input", step)
+                    raise Exception("Timeout waiting for search input after Cloudflare bypass")
                 try:
                     print("Clicking Cloudflare bypass...")
                     sb.uc_gui_click_cf()
                 except:
                     pass
+                time.sleep(1)  # Brief pause between attempts
 
-            print("Search input available, proceeding with search...")
+            elapsed = time.time() - start_time
+            print(f"✅ Search input available after {elapsed:.1f} seconds, proceeding with search...")
             step += 1
             screenshot(sb, "cloudflare_bypassed", step)
             sb.cdp.sleep(2)
@@ -89,14 +97,21 @@ def main():
             screenshot(sb, "business_link_clicked", step)
             
             print("Waiting for business details page and handling Cloudflare...")
+            start_time = time.time()
             while not sb.cdp.is_element_present('table'):
+                if time.time() - start_time > 30:
+                    print("⏰ Timeout after 30 seconds waiting for business details table")
+                    screenshot(sb, "timeout_business_details", step)
+                    raise Exception("Timeout waiting for business details table after Cloudflare bypass")
                 try:
                     print("Clicking Cloudflare bypass on details page...")
                     sb.uc_gui_click_cf()
                 except:
                     pass
+                time.sleep(1)  # Brief pause between attempts
             
-            print("Business details loaded, extracting data...")
+            elapsed = time.time() - start_time
+            print(f"✅ Business details loaded after {elapsed:.1f} seconds, extracting data...")
             step += 1
             screenshot(sb, "business_details_loaded", step)
             html = sb.cdp.get_page_source()
