@@ -47,37 +47,27 @@ def save_html_content(control_number, html_content, request_type="content"):
         print(f"[{control_number}] Error saving HTML content: {str(e)}")
         return None
 
-def bypass_cloudflare_with_timeout(sb, control_number, timeout_seconds=30):
-    """Bypass Cloudflare with timeout and return success status"""
-    start_time = time.time()
-    control_input = 'input[id="txtControlNo"]'
-    
-    print(f"[{control_number}] Starting Cloudflare bypass (timeout: {timeout_seconds}s)")
-    
-    while time.time() - start_time < timeout_seconds:
-        try:
-            if sb.cdp.is_element_present(control_input):
-                elapsed = int(time.time() - start_time)
-                print(f"[{control_number}] Cloudflare bypass successful after {elapsed}s")
-                return True
-            
-            try:
-                save_screenshot(sb, control_number, "cf_bypass", "before")
-                sb.uc_gui_click_captcha()
-                print(f"[{control_number}] Clicked Cloudflare bypass button")
-                save_screenshot(sb, control_number, "cf_bypass", "after")
-            except Exception as cf_e:
-                print(f"[{control_number}] Cloudflare click failed: {str(cf_e)}")
-            
-            time.sleep(1)  # Wait 1 second before next attempt
-            
-        except Exception as e:
-            print(f"[{control_number}] Error during Cloudflare bypass: {str(e)}")
-            time.sleep(1)
-    
-    elapsed = int(time.time() - start_time)
-    print(f"[{control_number}] Cloudflare bypass timeout after {elapsed}s")
-    return False
+def handle_cloudflare_captcha(sb, control_number):
+    """Handle Cloudflare captcha using working GitHub Actions methods"""
+    try:
+        print(f"[{control_number}] Handling Cloudflare captcha...")
+        save_screenshot(sb, control_number, "captcha", "before")
+        
+        # Use the working methods from GitHub Actions
+        sb.sleep(1)
+        sb.uc_gui_click_captcha()
+        sb.sleep(1) 
+        sb.uc_gui_handle_captcha()
+        sb.sleep(1)
+        
+        save_screenshot(sb, control_number, "captcha", "after")
+        print(f"[{control_number}] Cloudflare captcha handled successfully")
+        return True
+        
+    except Exception as e:
+        print(f"[{control_number}] Error handling Cloudflare captcha: {str(e)}")
+        save_screenshot(sb, control_number, "captcha", "failed")
+        return False
 
 def get_value_by_label(table, label):
     """Helper to get value by label in a table"""
@@ -150,13 +140,13 @@ def parse_georgia_business_data(html_content, control_number):
         return None
 
 def scrape_georgia_business(control_number, max_attempts=3):
-    """Scrape Georgia business data with retry logic"""
+    """Scrape Georgia business data using working GitHub Actions pattern"""
     
     for attempt in range(1, max_attempts + 1):
         print(f"[{control_number}] Starting scraping attempt {attempt}/{max_attempts}")
         
         try:
-            with SB(uc=True, test=True, locale="en", xvfb=True) as sb:
+            with SB(uc=True, test=True) as sb:
                 url = "https://ecorp.sos.ga.gov/BusinessSearch"
                 print(f"[{control_number}] Opening URL: {url}")
                 sb.activate_cdp_mode(url)
@@ -164,24 +154,11 @@ def scrape_georgia_business(control_number, max_attempts=3):
                 # Save initial screenshot
                 save_screenshot(sb, control_number, "initial", f"attempt_{attempt}")
 
-                # Bypass Cloudflare with timeout
-                bypass_success = bypass_cloudflare_with_timeout(sb, control_number, timeout_seconds=30)
-                
-                if not bypass_success:
-                    print(f"[{control_number}] Cloudflare bypass failed on attempt {attempt}")
-                    save_screenshot(sb, control_number, "cloudflare_failed", f"attempt_{attempt}")
-                    if attempt < max_attempts:
-                        print(f"[{control_number}] Retrying with new browser session...")
-                        continue
-                    else:
-                        print(f"[{control_number}] All attempts failed - Cloudflare bypass timeout")
-                        return None
-
-                # Save successful Cloudflare bypass screenshot
-                save_screenshot(sb, control_number, "cloudflare_success", f"attempt_{attempt}")
+                # Handle Cloudflare captcha on initial page
+                handle_cloudflare_captcha(sb, control_number)
 
                 # Now proceed with the search
-                print(f"[{control_number}] Cloudflare bypassed, proceeding with search")
+                print(f"[{control_number}] Proceeding with search")
                                 
                 # Type control number
                 control_input = 'input[id="txtControlNo"]'
@@ -199,24 +176,9 @@ def scrape_georgia_business(control_number, max_attempts=3):
                 sb.cdp.wait_for_element_visible('td > a', timeout=10)
                 url_entity = sb.cdp.get_element_attribute('td > a', 'href')
                 sb.cdp.get(url_entity)
-                table = 'table'
                 
-                # Handle Cloudflare on business details page
-                print(f"[{control_number}] Handling Cloudflare on business details page")
-                bypass_success_details = bypass_cloudflare_with_timeout(sb, table, timeout_seconds=30)
-                
-                if not bypass_success_details:
-                    print(f"[{control_number}] Cloudflare bypass failed on business details page, attempt {attempt}")
-                    save_screenshot(sb, control_number, "cloudflare_details_failed", f"attempt_{attempt}")
-                    if attempt < max_attempts:
-                        print(f"[{control_number}] Retrying with new browser session...")
-                        continue
-                    else:
-                        print(f"[{control_number}] All attempts failed - Cloudflare bypass timeout on details page")
-                        return None
-
-                # Save successful details page screenshot
-                save_screenshot(sb, control_number, "cloudflare_details_success", f"attempt_{attempt}")
+                # Handle Cloudflare captcha on business details page
+                handle_cloudflare_captcha(sb, control_number)
                 
                 # Save final screenshot
                 save_screenshot(sb, control_number, "final_details", f"attempt_{attempt}")
