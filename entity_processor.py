@@ -62,8 +62,10 @@ def bypass_cloudflare_with_timeout(sb, control_number, timeout_seconds=30):
                 return True
             
             try:
+                save_screenshot(sb, control_number, "cf_bypass", "before")
                 sb.uc_gui_click_captcha()
                 print(f"[{control_number}] Clicked Cloudflare bypass button")
+                save_screenshot(sb, control_number, "cf_bypass", "after")
             except Exception as cf_e:
                 print(f"[{control_number}] Cloudflare click failed: {str(cf_e)}")
             
