@@ -19,11 +19,44 @@ def setup_recording():
         try:
             os.makedirs("recordings", exist_ok=True)
             video_file = f"recordings/session_{datetime.now().strftime('%H%M%S')}.mp4"
-            cmd = ["ffmpeg", "-y", "-f", "x11grab", "-s", "1920x1080", "-i", ":99", "-r", "3", "-preset", "ultrafast", video_file]
-            print(f"🎥 Recording to: {video_file}")
-            return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL), video_file
-        except:
+            
+            # Test if display is available
+            print(f"🖥️ Display environment: {os.getenv('DISPLAY', 'Not set')}")
+            
+            # Test if ffmpeg is available
+            try:
+                ffmpeg_test = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, timeout=5)
+                print(f"🎥 ffmpeg available: {ffmpeg_test.returncode == 0}")
+                if ffmpeg_test.returncode != 0:
+                    print(f"🎥 ffmpeg error: {ffmpeg_test.stderr[:100]}")
+            except Exception as e:
+                print(f"🎥 ffmpeg test failed: {e}")
+                return None, None
+            
+            cmd = ["ffmpeg", "-y", "-f", "x11grab", "-s", "1920x1080", "-i", ":99", "-r", "3", "-preset", "ultrafast", "-t", "600", video_file]
+            print(f"🎥 Starting recording: {video_file}")
+            print(f"🎥 Command: {' '.join(cmd)}")
+            
+            # Start recording with error output visible
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+            # Give it a moment and check if it's still running
+            time.sleep(2)
+            if process.poll() is None:
+                print(f"✅ Recording process started successfully (PID: {process.pid})")
+                return process, video_file
+            else:
+                stdout, stderr = process.communicate()
+                print(f"❌ Recording failed to start")
+                print(f"❌ stdout: {stdout.decode()[:200]}")
+                print(f"❌ stderr: {stderr.decode()[:200]}")
+                return None, None
+                
+        except Exception as e:
+            print(f"❌ Recording setup exception: {e}")
             return None, None
+    else:
+        print("ℹ️ Not in GitHub Actions - skipping recording")
     return None, None
 
 def screenshot(sb, name, step):
@@ -235,6 +268,28 @@ def main():
         if recording:
             print("🎬 Stopping recording...")
             recording.terminate()
+            
+            # Wait a bit for ffmpeg to finish writing
+            time.sleep(3)
+            
+            # Check if video file was created
+            if video_file and os.path.exists(video_file):
+                file_size = os.path.getsize(video_file)
+                print(f"✅ Recording saved: {video_file} ({file_size} bytes)")
+                if file_size == 0:
+                    print("⚠️ Warning: Video file is empty")
+            else:
+                print(f"❌ Recording file not found: {video_file}")
+                
+            # List all files in recordings directory
+            if os.path.exists("recordings"):
+                print("📁 Files in recordings directory:")
+                for f in os.listdir("recordings"):
+                    full_path = os.path.join("recordings", f)
+                    size = os.path.getsize(full_path) if os.path.isfile(full_path) else 0
+                    print(f"  📄 {f} ({size} bytes)")
+            else:
+                print("📁 No recordings directory found")
 
 if __name__ == "__main__":
     main() 
