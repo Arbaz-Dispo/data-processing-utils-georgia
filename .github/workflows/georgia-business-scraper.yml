@@ -1,7 +1,12 @@
-name: Georgia Business Entity Processor
-
+name: Georgia Business Entity Scraper
 on:
-  workflow_dispatch:  # Allows manual triggering
+  schedule:
+    - cron: "38 * * * *"
+  push:
+    branches: [ master ]
+  pull_request:
+    branches:
+  workflow_dispatch:
     inputs:
       control_number:
         description: 'Entity control number to process (e.g., "K805670")'
@@ -11,142 +16,85 @@ on:
         description: 'Unique request ID (for tracking requests)'
         required: false
         default: ''
-      test_run:
-        description: 'Test run (optional)'
-        required: false
-        default: 'false'
-      force_rebuild:
-        description: 'Force rebuild Docker image'
-        required: false
-        default: 'false'
-        type: boolean
-  push:
-    paths:
-      - 'Dockerfile'  # Rebuild image when Dockerfile changes
-      - 'requirements.txt'  # Rebuild when dependencies change
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME_RAW: ${{ github.repository }}/georgia-processor
 
 jobs:
-  # Build and push Docker image (only when needed)
-  build-image:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event.inputs.force_rebuild == 'true'
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      image-tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-    
-    steps:
-    - name: Set lowercase image name
-      run: |
-        IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME_RAW }}" | tr '[:upper:]' '[:lower:]')
-        echo "IMAGE_NAME=$IMAGE_NAME_LOWER" >> $GITHUB_ENV
-        echo "Using image name: $IMAGE_NAME_LOWER"
-        
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
-    - name: Set up Docker Buildx with aggressive caching
-      uses: docker/setup-buildx-action@v3
-      with:
-        driver-opts: |
-          image=moby/buildkit:buildx-stable-1
-          network=host
-        
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Build and push with maximum caching
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-        cache-from: |
-          type=gha
-          type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cache
-        cache-to: |
-          type=gha,mode=max
-          type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cache,mode=max
-        platforms: linux/amd64
-        build-args: |
-          BUILDKIT_INLINE_CACHE=1
+  build:
 
-  # Run the Georgia business processing workflow
-  process-georgia-entity:
-    runs-on: ubuntu-latest
-    needs: [build-image]
-    if: always() && (needs.build-image.result == 'success' || needs.build-image.result == 'skipped')
-    permissions:
-      contents: read
-      packages: read
-    
+    env:
+      PY_COLORS: "1"
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.12"]
+
+    runs-on: ${{ matrix.os }}
     steps:
-    - name: Set lowercase image name
-      run: |
-        IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME_RAW }}" | tr '[:upper:]' '[:lower:]')
-        echo "IMAGE_NAME=$IMAGE_NAME_LOWER" >> $GITHUB_ENV
-        echo "Using image name: $IMAGE_NAME_LOWER"
-        
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
       with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Determine Docker image to use
-      id: image
+        python-version: ${{ matrix.python-version }}
+    - name: Set Locale
+      if: runner.os == 'Linux'
       run: |
-        # Use the lowercase image name set at the job level
-        IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-        echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
-        echo "Using Docker image: $IMAGE_TAG"
-        
-    - name: Optimized Docker setup (targeting 10-15 seconds)
+        sudo apt-get install tzdata locales -y && sudo locale-gen en_US.UTF-8
+        sudo localectl set-locale LANG="en_US.UTF-8"
+        export LANG="en_US.UTF-8"
+        sudo update-locale
+        locale -a
+        locale
+        locale -c -k LC_NUMERIC
+        localectl status
+    - name: Install dependencies
       run: |
-        IMAGE_TAG="${{ steps.image.outputs.image_tag }}"
-        echo "🚀 Optimized Docker setup: $IMAGE_TAG"
-        
-        # Enable Docker BuildKit for faster operations
-        export DOCKER_BUILDKIT=1
-        
-        # Try multiple strategies for fastest pull
-        echo "📦 Attempting pull strategies..."
-        
-        # Strategy 1: Direct pull (usually fastest if image exists)
-        if timeout 45s docker pull "$IMAGE_TAG" 2>/dev/null; then
-          echo "✅ Pre-built image pulled successfully"
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-          
-        # Strategy 2: Check if we can build with cache faster than pull
-        elif [ -f "Dockerfile" ]; then
-          echo "🔨 Building with cache (may be faster than remote pull)..."
-          docker build \
-            --cache-from "$IMAGE_TAG" \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            -t georgia-processor:local \
-            . || docker build -t georgia-processor:local .
-          echo "IMAGE_TAG=georgia-processor:local" >> $GITHUB_ENV
-          
-        else
-          echo "❌ No Dockerfile found and pull failed"
-          exit 1
-        fi
-        
-        echo "✅ Docker setup complete!"
-        
+        cd "Georgia Scraper"
+        python -m pip install --upgrade pip
+        pip install --upgrade pip
+        pip install --upgrade wheel
+        pip install -r requirements.txt
+        pip install --upgrade pyautogui
+    - name: Install extra dependencies
+      if: runner.os == 'Linux'
+      run: |
+        pip install --upgrade python-xlib
+    - name: Lint with flake8
+      run: |
+        pip install flake8
+        # Stop the build if there are flake8 issues
+        cd "Georgia Scraper"
+        flake8 . --count --show-source --statistics --exclude=temp
+    - name: Install Chrome
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt install google-chrome-stable
+    - name: Check the console scripts interface
+      run: |
+        seleniumbase
+        sbase
+    - name: Install chromedriver
+      run: |
+        seleniumbase install chromedriver
+        seleniumbase install uc_driver
+    - name: Make sure pytest is working
+      run: |
+        echo "def test_1(): pass" > nothing.py
+        pytest nothing.py --uc
+    - name: Check which Chrome binaries exist
+      run: |
+        python -c "import os; print(os.path.exists('/usr/bin/google-chrome'))"
+        python -c "import os; print(os.path.exists('/bin/google-chrome-stable'))"
+        python -c "import os; print(os.path.exists('/bin/chromium-browser'))"
+        python -c "import os; print(os.path.exists('/bin/chromium'))"
+    - name: Display Chrome binary that's used
+      run: |
+        python -c "from seleniumbase.core import detect_b_ver; print(detect_b_ver.get_binary_location('google-chrome'))"
+        python -c "from seleniumbase import undetected; print(undetected.find_chrome_executable())"
+    - name: Make sure pytest with sb is working
+      run: |
+        echo "def test_0(sb): pass" > verify_sb.py
+        pytest verify_sb.py
     - name: Parse control number and setup request ID
       id: parse-control
       run: |
@@ -161,92 +109,61 @@ jobs:
         echo "control_number=$CONTROL_NUMBER" >> $GITHUB_OUTPUT
         echo "request_id=$REQUEST_ID" >> $GITHUB_OUTPUT
         echo "Processing Georgia entity control number: $CONTROL_NUMBER with request ID: $REQUEST_ID"
-        
-    - name: Run Georgia business processor
-      id: processor
+    - name: Run Georgia Business Entity Processor
+      working-directory: Georgia Scraper
       env:
         CONTROL_NUMBER: ${{ steps.parse-control.outputs.control_number }}
         REQUEST_ID: ${{ steps.parse-control.outputs.request_id }}
+        PYTHONUNBUFFERED: 1
+        LANG: "en_US.UTF-8"
       run: |
         echo "🚀 Starting Georgia business processor..."
         echo "Control Number: $CONTROL_NUMBER"
         echo "Request ID: $REQUEST_ID"
-        
-        # Run the Georgia processor with timeout (with virtual display support)
-        docker run --rm \
-          --name georgia-processor-${{ github.run_number }} \
-          -e CONTROL_NUMBER="${CONTROL_NUMBER}" \
-          -e REQUEST_ID="${REQUEST_ID}" \
-          -e PYTHONUNBUFFERED=1 \
-          -e DISPLAY=:99 \
-          -v "$(pwd):/workspace" \
-          -w /workspace \
-          --shm-size=2gb \
-          "$IMAGE_TAG" \
-          timeout 900s python entity_processor.py "${CONTROL_NUMBER}"
-        
-        # Check if processing was successful
-        if [ -f "processed_data_${REQUEST_ID}.json" ]; then
-          echo "processing_success=true" >> $GITHUB_OUTPUT
-          echo "✅ Processing completed successfully"
-        else
-          echo "processing_success=false" >> $GITHUB_OUTPUT
-          echo "❌ Processing failed - no output file found"
-        fi
-        
+        python entity_processor.py "$CONTROL_NUMBER"
     - name: List generated files
       if: always()
+      working-directory: Georgia Scraper
       run: |
-        echo "Files in workspace:"
+        echo "Files in Georgia Scraper directory:"
         ls -la
         echo "Looking for JSON files:"
-        find . -name "*.json" -type f
+        find . -name "*.json" -type f 2>/dev/null || echo "No JSON files found"
         echo "Looking for log files:"
         find . -name "logs/*" -type f 2>/dev/null || echo "No logs directory found"
         echo "Looking for screenshots:"
         find . -name "logs/*.png" -type f 2>/dev/null || echo "No screenshots found"
-        
-    - name: Upload processed data as artifact
+    - name: Upload results as artifact
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: georgia-business-data-${{ steps.parse-control.outputs.request_id }}
         path: |
-          processed_data_*.json
-          logs/
+          Georgia Scraper/*.json
+          Georgia Scraper/logs/
         retention-days: 30
         if-no-files-found: warn
-        
     - name: Show processing summary
       if: always()
+      working-directory: Georgia Scraper
       run: |
         echo "=== GEORGIA BUSINESS PROCESSING SUMMARY ==="
         echo "Control Number: ${{ steps.parse-control.outputs.control_number }}"
         echo "Request ID: ${{ steps.parse-control.outputs.request_id }}"
-        echo "Processing Success: ${{ steps.processor.outputs.processing_success }}"
         
-        if [ -f processed_data_*.json ]; then
-          for file in processed_data_*.json; do
-            if [ -f "$file" ]; then
-              echo "📄 Processed data file: $file"
-              echo "📊 File size: $(wc -c < "$file") bytes"
-              
-              # Try to extract summary from the JSON structure
-              if command -v jq >/dev/null 2>&1; then
-                echo "📋 Control Number: $(jq -r '.["Business Information"]["Control Number"] // "N/A"' "$file" 2>/dev/null)"
-                echo "🏢 Business Name: $(jq -r '.["Business Information"]["Business Name"] // "N/A"' "$file" 2>/dev/null)"
-                echo "📈 Business Status: $(jq -r '.["Business Information"]["Business Status"] // "N/A"' "$file" 2>/dev/null)"
-                echo "📍 Principal Office: $(jq -r '.["Business Information"]["Principal Office Address"] // "N/A"' "$file" 2>/dev/null)"
-                
-                # Count officers if present
-                OFFICER_COUNT=$(jq '.["Officer Information"] | length // 0' "$file" 2>/dev/null || echo "0")
-                echo "👥 Officers found: $OFFICER_COUNT"
-              else
-                echo "jq not available, showing file size only"
-              fi
-              echo "---"
-            fi
-          done
-        else
-          echo "❌ No processed data files found"
+        # Show any JSON output directly
+        for file in *.json; do
+          if [ -f "$file" ]; then
+            echo "📄 Found JSON file: $file"
+            echo "📊 File size: $(wc -c < "$file") bytes"
+            echo "📋 JSON Content:"
+            cat "$file"
+            echo "---"
+          fi
+        done
+        
+        # Show logs if available
+        if [ -d "logs" ]; then
+          echo "📁 Log files found:"
+          ls -la logs/
         fi 
