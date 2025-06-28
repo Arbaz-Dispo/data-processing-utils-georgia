@@ -7,9 +7,34 @@ Adapted for GitHub Actions with command line support
 import json
 import sys
 import os
+import subprocess
 from seleniumbase import SB
 from bs4 import BeautifulSoup
 from datetime import datetime
+
+def setup_recording():
+    """Start video recording if in GitHub Actions"""
+    if os.getenv('GITHUB_ACTIONS'):
+        try:
+            os.makedirs("recordings", exist_ok=True)
+            video_file = f"recordings/session_{datetime.now().strftime('%H%M%S')}.mp4"
+            cmd = ["ffmpeg", "-y", "-f", "x11grab", "-s", "1920x1080", "-i", ":99", "-r", "3", "-preset", "ultrafast", video_file]
+            print(f"🎥 Recording to: {video_file}")
+            return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL), video_file
+        except:
+            return None, None
+    return None, None
+
+def screenshot(sb, name, step):
+    """Take screenshot if in GitHub Actions"""
+    if os.getenv('GITHUB_ACTIONS'):
+        try:
+            os.makedirs("screenshots", exist_ok=True)
+            filename = f"screenshots/step_{step:02d}_{name}.png"
+            sb.save_screenshot(filename)
+            print(f"📸 {filename}")
+        except:
+            pass
 
 def main():
     # Get control number from command line
@@ -26,12 +51,18 @@ def main():
     print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 50)
 
+    # Start recording if in GitHub Actions
+    recording, video_file = setup_recording()
+    step = 0
+
     try:
         # Use EXACT same configuration as working testng.py
         with SB(uc=True, test=True, locale="en") as sb:
             url = "https://ecorp.sos.ga.gov/BusinessSearch"
             print(f"Opening: {url}")
             sb.activate_cdp_mode(url)
+            step += 1
+            screenshot(sb, "initial_load", step)
 
             # Open site and bypass Cloudflare - EXACT same logic as testng.py
             print("Waiting for search input and handling Cloudflare...")
@@ -44,12 +75,18 @@ def main():
                     pass
 
             print("Search input available, proceeding with search...")
+            step += 1
+            screenshot(sb, "cloudflare_bypassed", step)
             sb.cdp.sleep(2)
             sb.cdp.type(control_input, control_number)
             sb.cdp.click('input[id="btnSearch"]')
+            step += 1
+            screenshot(sb, "search_submitted", step)
             
             print("Clicking business details link...")
             sb.cdp.click("td > a")
+            step += 1
+            screenshot(sb, "business_link_clicked", step)
             
             print("Waiting for business details page and handling Cloudflare...")
             while not sb.cdp.is_element_present('table'):
@@ -60,7 +97,16 @@ def main():
                     pass
             
             print("Business details loaded, extracting data...")
+            step += 1
+            screenshot(sb, "business_details_loaded", step)
             html = sb.cdp.get_page_source()
+
+            # Save HTML for debugging in GitHub Actions
+            if os.getenv('GITHUB_ACTIONS'):
+                os.makedirs("html_dumps", exist_ok=True)
+                with open(f"html_dumps/business_details_{request_id}.html", "w", encoding="utf-8") as f:
+                    f.write(html)
+                print(f"💾 HTML saved for debugging")
 
             # Parse data using EXACT same logic as testng.py
             soup = BeautifulSoup(html, "html.parser")
@@ -168,6 +214,12 @@ def main():
         
         print(f"❌ Error details saved to: {output_filename}")
         sys.exit(1)
+    
+    finally:
+        # Stop recording if it was started
+        if recording:
+            print("🎬 Stopping recording...")
+            recording.terminate()
 
 if __name__ == "__main__":
     main() 
