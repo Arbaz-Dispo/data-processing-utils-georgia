@@ -35,7 +35,7 @@ def main():
     request_id = os.getenv('REQUEST_ID', f'win-{control_number}-{int(datetime.now().timestamp())}')
     
     print("=" * 60)
-    print("🪟 Georgia Business Scraper (Windows Optimized)")
+    print("[WIN] Georgia Business Scraper (Windows Optimized)")
     print("=" * 60)
     print(f"Control Number: {control_number}")
     print(f"Request ID: {request_id}")
@@ -60,7 +60,7 @@ def main():
             start_time = time.time()
             while not sb.cdp.is_element_present(control_input):
                 if time.time() - start_time > 30:
-                    print("⏰ Timeout after 30 seconds waiting for search input")
+                    print("[TIMEOUT] Timeout after 30 seconds waiting for search input")
                     screenshot(sb, "timeout_search_input", step)
                     raise Exception("Timeout waiting for search input after Cloudflare bypass")
                 try:
@@ -71,7 +71,7 @@ def main():
                 time.sleep(1)  # Brief pause between attempts
 
             elapsed = time.time() - start_time
-            print(f"✅ Search input available after {elapsed:.1f} seconds, proceeding with search...")
+            print(f"[OK] Search input available after {elapsed:.1f} seconds, proceeding with search...")
             step += 1
             screenshot(sb, "cloudflare_bypassed", step)
             sb.cdp.sleep(2)
@@ -89,7 +89,7 @@ def main():
             start_time = time.time()
             while not sb.cdp.is_element_present('table'):
                 if time.time() - start_time > 30:
-                    print("⏰ Timeout after 30 seconds waiting for business details table")
+                    print("[TIMEOUT] Timeout after 30 seconds waiting for business details table")
                     screenshot(sb, "timeout_business_details", step)
                     raise Exception("Timeout waiting for business details table after Cloudflare bypass")
                 try:
@@ -100,7 +100,7 @@ def main():
                 time.sleep(1)  # Brief pause between attempts
             
             elapsed = time.time() - start_time
-            print(f"✅ Business details loaded after {elapsed:.1f} seconds, extracting data...")
+            print(f"[OK] Business details loaded after {elapsed:.1f} seconds, extracting data...")
             step += 1
             screenshot(sb, "business_details_loaded", step)
             html = sb.cdp.get_page_source()
@@ -110,7 +110,7 @@ def main():
                 os.makedirs("html_dumps", exist_ok=True)
                 with open(f"html_dumps/business_details_{request_id}.html", "w", encoding="utf-8") as f:
                     f.write(html)
-                print(f"💾 HTML saved for debugging")
+                print(f"[SAVE] HTML saved for debugging")
 
             # Parse data using EXACT same logic as testng.py
             soup = BeautifulSoup(html, "html.parser")
@@ -187,21 +187,21 @@ def main():
                 }, f, indent=2, ensure_ascii=False)
 
             print("\n" + "=" * 60)
-            print("🎉 SUCCESS - Data Extracted on Windows!")
+            print("[SUCCESS] Data Extracted on Windows!")
             print("=" * 60)
             print("Extracted Business Data:")
             print(json.dumps(data, indent=2, ensure_ascii=False))
-            print(f"\n✅ Results saved to: {output_filename}")
+            print(f"\n[OK] Results saved to: {output_filename}")
             
             # Verify we got meaningful data
             business_name = data.get("Business Information", {}).get("Business Name")
             if business_name:
-                print(f"✅ Successfully extracted data for: {business_name}")
+                print(f"[OK] Successfully extracted data for: {business_name}")
             else:
-                print("⚠️ Warning: No business name found in extracted data")
+                print("[WARN] Warning: No business name found in extracted data")
                 
     except Exception as e:
-        print(f"\n💥 Error occurred: {str(e)}")
+        print(f"\n[ERROR] Error occurred: {str(e)}")
         
         # Create error result file
         error_data = {
@@ -218,12 +218,12 @@ def main():
         with open(output_filename, 'w', encoding='utf-8') as f:
             json.dump(error_data, f, indent=2, ensure_ascii=False)
         
-        print(f"❌ Error details saved to: {output_filename}")
+        print(f"[ERROR] Error details saved to: {output_filename}")
         sys.exit(1)
     
     finally:
         # Windows scraper cleanup (no recording to stop)
-        print("🪟 Windows scraper completed")
+        print("[WIN] Windows scraper completed")
 
 if __name__ == "__main__":
     main() 
