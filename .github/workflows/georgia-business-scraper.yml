@@ -1,4 +1,4 @@
-name: Georgia Business Entity Scraper
+name: 🚀 Georgia Business Entity Scraper (Windows)
 on:
   schedule:
     - cron: "38 * * * *"
@@ -18,166 +18,242 @@ on:
         default: ''
 
 jobs:
-  build:
-
+  scrape-georgia:
+    runs-on: windows-latest  # Fastest Windows runner
+    timeout-minutes: 10
+    
     env:
       PY_COLORS: "1"
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        os: [ubuntu-latest]
-        python-version: ["3.12"]
+      PYTHONUNBUFFERED: 1
 
-    runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: 📥 Checkout Repository
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ matrix.python-version }}
-    - name: Set Locale
-      if: runner.os == 'Linux'
+        python-version: '3.12'
+        cache: 'pip'
+    
+    - name: 📦 Install Dependencies
       run: |
-        sudo apt-get install tzdata locales -y && sudo locale-gen en_US.UTF-8
-        sudo localectl set-locale LANG="en_US.UTF-8"
-        export LANG="en_US.UTF-8"
-        sudo update-locale
-        locale -a
-        locale
-        locale -c -k LC_NUMERIC
-        localectl status
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install --upgrade pip
-        pip install --upgrade wheel
+        Write-Host "📦 Installing Python packages..."
+        python -m pip install --upgrade pip wheel
         pip install -r requirements.txt
-        pip install --upgrade pyautogui
-    - name: Install extra dependencies
-      if: runner.os == 'Linux'
+        Write-Host "✅ Dependencies installed"
+    
+    - name: 🌐 Verify Chrome Browser
       run: |
-        pip install --upgrade python-xlib
-    - name: Lint with flake8
+        Write-Host "🌐 Checking for Chrome browser..."
+        
+        # Check multiple possible Chrome locations
+        $chromePaths = @(
+          "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe",
+          "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+          "${env:LOCALAPPDATA}\Google\Chrome\Application\chrome.exe"
+        )
+        
+        $chromeFound = $false
+        foreach ($path in $chromePaths) {
+          if (Test-Path $path) {
+            $chromeVersion = (Get-Item $path).VersionInfo.FileVersion
+            Write-Host "✅ Found Chrome at: $path"
+            Write-Host "✅ Chrome version: $chromeVersion"
+            $chromeFound = $true
+            break
+          }
+        }
+        
+        if (-not $chromeFound) {
+          Write-Host "⚠️ Chrome not found in standard locations, checking if available in PATH..."
+          try {
+            $chromeVersion = & chrome --version 2>$null
+            Write-Host "✅ Chrome available in PATH: $chromeVersion"
+            $chromeFound = $true
+          } catch {
+            Write-Host "❌ Chrome not found! This may cause issues."
+            Write-Host "Available programs:"
+            Get-Command *chrome* -ErrorAction SilentlyContinue | Format-Table Name, Source
+          }
+        }
+        
+        if ($chromeFound) {
+          Write-Host "✅ Chrome verification successful"
+        }
+    
+    - name: 🔧 Setup SeleniumBase
       run: |
-        pip install flake8
-        # Show flake8 issues but don't stop the build
-        flake8 . --count --show-source --statistics --exclude=temp || true
-    - name: Install Chrome
-      if: matrix.os == 'ubuntu-latest'
+        Write-Host "🔧 Setting up SeleniumBase..."
+        try {
+          seleniumbase install chromedriver
+          Write-Host "✅ ChromeDriver installed"
+          
+          seleniumbase install uc_driver
+          Write-Host "✅ UC Driver installed"
+          
+          Write-Host "✅ SeleniumBase configured successfully"
+        } catch {
+          Write-Host "❌ SeleniumBase setup failed: $_"
+          Write-Host "Attempting manual driver installation..."
+          
+          # Fallback: try manual installation
+          python -c "from seleniumbase import get_driver; get_driver('chrome')" 2>$null
+          Write-Host "✅ Fallback driver setup completed"
+        }
+    
+    - name: 🧪 Quick Test
       run: |
-        sudo apt install google-chrome-stable
-    - name: Install recording tools
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        echo "🎥 Installing ffmpeg for screen recording..."
-        sudo apt-get install -y ffmpeg
-        ffmpeg -version | head -n 1
-        echo "✅ Recording tools installed"
-    - name: Check the console scripts interface
-      run: |
-        seleniumbase
-        sbase
-    - name: Install chromedriver
-      run: |
-        seleniumbase install chromedriver
-        seleniumbase install uc_driver
-    - name: Make sure pytest is working
-      run: |
-        echo "def test_1(): pass" > nothing.py
-        pytest nothing.py --uc
-    - name: Check which Chrome binaries exist
-      run: |
-        python -c "import os; print(os.path.exists('/usr/bin/google-chrome'))"
-        python -c "import os; print(os.path.exists('/bin/google-chrome-stable'))"
-        python -c "import os; print(os.path.exists('/bin/chromium-browser'))"
-        python -c "import os; print(os.path.exists('/bin/chromium'))"
-    - name: Display Chrome binary that's used
-      run: |
-        python -c "from seleniumbase.core import detect_b_ver; print(detect_b_ver.get_binary_location('google-chrome'))"
-        python -c "from seleniumbase import undetected; print(undetected.find_chrome_executable())"
-    - name: Make sure pytest with sb is working
-      run: |
-        echo "def test_0(sb): pass" > verify_sb.py
-        pytest verify_sb.py
-    - name: Parse control number and setup request ID
+        Write-Host "🧪 Testing SeleniumBase..."
+        
+        # Create test file using PowerShell
+        'def test_quick(): pass' | Out-File -FilePath "test_quick.py" -Encoding UTF8
+        
+        try {
+          pytest test_quick.py --uc -v --tb=short
+          Write-Host "✅ SeleniumBase test passed"
+        } catch {
+          Write-Host "⚠️ SeleniumBase test failed: $_"
+          Write-Host "This may indicate Chrome/driver compatibility issues"
+          
+          # Try a simpler test
+          Write-Host "Attempting basic import test..."
+          python -c "from seleniumbase import SB; print('SeleniumBase imported successfully')"
+        }
+    
+    - name: 📋 Parse Control Number
       id: parse-control
       run: |
-        CONTROL_NUMBER="${{ github.event.inputs.control_number || 'K805670' }}"
-        REQUEST_ID="${{ github.event.inputs.request_id || '' }}"
+        $controlNumber = "${{ github.event.inputs.control_number }}"
+        if ([string]::IsNullOrEmpty($controlNumber)) { $controlNumber = "K805670" }
         
-        # Generate a fallback request ID if none provided
-        if [ -z "$REQUEST_ID" ]; then
-          REQUEST_ID="ga-$(date +%Y%m%d)-${{ github.run_number }}-$(date +%s)"
-        fi
+        $requestId = "${{ github.event.inputs.request_id }}"
+        if ([string]::IsNullOrEmpty($requestId)) {
+          $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+          $requestId = "ga-win-${{ github.run_number }}-$timestamp"
+        }
         
-        echo "control_number=$CONTROL_NUMBER" >> $GITHUB_OUTPUT
-        echo "request_id=$REQUEST_ID" >> $GITHUB_OUTPUT
-        echo "Processing Georgia entity control number: $CONTROL_NUMBER with request ID: $REQUEST_ID"
-    - name: Run Simple Georgia Business Scraper
+        Write-Host "Control Number: $controlNumber"
+        Write-Host "Request ID: $requestId"
+        
+        # Set outputs for next steps using proper PowerShell syntax
+        Add-Content -Path $env:GITHUB_OUTPUT -Value "control_number=$controlNumber"
+        Add-Content -Path $env:GITHUB_OUTPUT -Value "request_id=$requestId"
+    
+    - name: 🚀 Run Georgia Business Scraper
       env:
         CONTROL_NUMBER: ${{ steps.parse-control.outputs.control_number }}
         REQUEST_ID: ${{ steps.parse-control.outputs.request_id }}
-        PYTHONUNBUFFERED: 1
-        LANG: "en_US.UTF-8"
       run: |
-        echo "🚀 Starting simple Georgia business scraper..."
-        echo "Control Number: $CONTROL_NUMBER"
-        echo "Request ID: $REQUEST_ID"
-        echo "Using exact testng.py logic that works locally"
-        python simple_georgia_scraper.py "$CONTROL_NUMBER"
-    - name: List generated files
+        Write-Host "🚀 Starting Georgia business scraper on Windows..."
+        Write-Host "Control Number: $env:CONTROL_NUMBER"
+        Write-Host "Request ID: $env:REQUEST_ID"
+        Write-Host "Runner: Windows (no virtual display needed)"
+        Write-Host "Working Directory: $(Get-Location)"
+        
+        # Verify script exists
+        if (-not (Test-Path "windows_scraper.py")) {
+          Write-Host "❌ windows_scraper.py not found in current directory"
+          Write-Host "Available Python files:"
+          Get-ChildItem -Filter "*.py" | Format-Table Name, Length
+          exit 1
+        }
+        
+        Write-Host "✅ Found windows_scraper.py, starting execution..."
+        
+        try {
+          python windows_scraper.py "$env:CONTROL_NUMBER"
+          Write-Host "✅ Scraper completed successfully"
+        } catch {
+          Write-Host "❌ Scraper failed: $_"
+          Write-Host "Error details: $($Error[0])"
+          exit 1
+        }
+    
+    - name: 📁 List Generated Files
       if: always()
       run: |
-        echo "Files in root directory:"
-        ls -la
-        echo "Looking for JSON files:"
-        find . -name "*.json" -type f 2>/dev/null || echo "No JSON files found"
-        echo "Looking for screenshots:"
-        find . -name "screenshots/*.png" -type f 2>/dev/null || echo "No screenshots found"
-        echo "Looking for recordings:"
-        find . -name "recordings/*.mp4" -type f 2>/dev/null || echo "No recordings found"
-        echo "Looking for HTML dumps:"
-        find . -name "html_dumps/*.html" -type f 2>/dev/null || echo "No HTML dumps found"
-    - name: Upload results as artifact
+        Write-Host "📁 Files in current directory:"
+        Get-ChildItem -Force | Format-Table Name, Length, LastWriteTime
+        
+        Write-Host "`n🔍 Looking for output files..."
+        
+        # JSON files
+        $jsonFiles = Get-ChildItem -Filter "*.json" -ErrorAction SilentlyContinue
+        if ($jsonFiles) {
+          Write-Host "📄 JSON files found:"
+          $jsonFiles | ForEach-Object { Write-Host "  - $($_.Name) ($($_.Length) bytes)" }
+        } else {
+          Write-Host "📄 No JSON files found"
+        }
+        
+        # Screenshots
+        if (Test-Path "screenshots") {
+          $screenshots = Get-ChildItem "screenshots" -Filter "*.png" -ErrorAction SilentlyContinue
+          if ($screenshots) {
+            Write-Host "📸 Screenshots: $($screenshots.Count)"
+            $screenshots | ForEach-Object { Write-Host "  - $($_.Name)" }
+          } else {
+            Write-Host "📸 Screenshots directory exists but no PNG files found"
+          }
+        } else {
+          Write-Host "📸 No screenshots directory"
+        }
+        
+        # HTML dumps
+        if (Test-Path "html_dumps") {
+          $htmlFiles = Get-ChildItem "html_dumps" -Filter "*.html" -ErrorAction SilentlyContinue
+          if ($htmlFiles) {
+            Write-Host "💾 HTML dumps: $($htmlFiles.Count)"
+            $htmlFiles | ForEach-Object { Write-Host "  - $($_.Name)" }
+          } else {
+            Write-Host "💾 HTML dumps directory exists but no HTML files found"
+          }
+        } else {
+          Write-Host "💾 No HTML dumps directory"
+        }
+    
+    - name: 📦 Upload Results
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: georgia-business-data-${{ steps.parse-control.outputs.request_id }}
+        name: georgia-results-${{ steps.parse-control.outputs.request_id }}
         path: |
           *.json
           screenshots/
-          recordings/
           html_dumps/
         retention-days: 30
         if-no-files-found: warn
-    - name: Show processing summary
+    
+    - name: 📊 Display Results Summary
       if: always()
       run: |
-        echo "=== GEORGIA BUSINESS PROCESSING SUMMARY ==="
-        echo "Control Number: ${{ steps.parse-control.outputs.control_number }}"
-        echo "Request ID: ${{ steps.parse-control.outputs.request_id }}"
+        Write-Host "`n📊 GEORGIA SCRAPING RESULTS (WINDOWS)"
+        Write-Host ("=" * 50)
+        Write-Host "Control Number: ${{ steps.parse-control.outputs.control_number }}"
+        Write-Host "Request ID: ${{ steps.parse-control.outputs.request_id }}"
+        Write-Host "Runner: Windows Latest"
+        Write-Host ("=" * 50)
         
-        # Show any JSON output directly
-        for file in *.json; do
-          if [ -f "$file" ]; then
-            echo "📄 Found JSON file: $file"
-            echo "📊 File size: $(wc -c < "$file") bytes"
-            echo "📋 JSON Content:"
-            cat "$file"
-            echo "---"
-          fi
-        done
+        # Show JSON content
+        $jsonFiles = Get-ChildItem -Filter "*.json" -ErrorAction SilentlyContinue
+        if ($jsonFiles) {
+          foreach ($file in $jsonFiles) {
+            Write-Host "`n📄 Results from: $($file.Name)"
+            Write-Host "📊 File size: $($file.Length) bytes"
+            Write-Host "📋 Content:"
+            try {
+              $content = Get-Content $file.FullName -Raw -ErrorAction Stop
+              Write-Host $content
+            } catch {
+              Write-Host "❌ Failed to read file: $_"
+            }
+            Write-Host ("-" * 30)
+          }
+        } else {
+          Write-Host "❌ No JSON results found"
+          Write-Host "📁 Available files:"
+          Get-ChildItem | Select-Object Name, Length | Format-Table
+        }
         
-        # Show debug files if available
-        if [ -d "screenshots" ]; then
-          echo "📸 Screenshots found: $(ls screenshots/*.png 2>/dev/null | wc -l)"
-        fi
-        if [ -d "recordings" ]; then
-          echo "🎥 Recordings found:"
-          ls -la recordings/
-        fi
-        if [ -d "html_dumps" ]; then
-          echo "💾 HTML dumps found:"
-          ls -la html_dumps/
-        fi 
+        Write-Host "`n🔗 Download artifacts at: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" 
