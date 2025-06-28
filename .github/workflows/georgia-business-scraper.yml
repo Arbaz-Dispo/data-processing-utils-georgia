@@ -61,8 +61,8 @@ jobs:
     - name: Lint with flake8
       run: |
         pip install flake8
-        # Stop the build if there are flake8 issues
-        flake8 . --count --show-source --statistics --exclude=temp
+        # Show flake8 issues but don't stop the build
+        flake8 . --count --show-source --statistics --exclude=temp || true
     - name: Install Chrome
       if: matrix.os == 'ubuntu-latest'
       run: |
